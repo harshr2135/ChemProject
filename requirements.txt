@@ -4,3 +4,7 @@ pandas
 scikit-learn
 streamlit
 openpyxl
+pillow
+fastapi
+uvicorn
+python-multipart
