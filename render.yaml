@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: chem-colour-analysis
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: main
+    healthCheckPath: /api/config
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
