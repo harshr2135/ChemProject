@@ -58,8 +58,15 @@ async function readError(response) {
   }
 }
 
+// Same centre crop as analyze_beaker_colour in lab_store.py.
+const SAMPLE_X0 = 0.3;
+const SAMPLE_X1 = 0.7;
+const SAMPLE_Y0 = 0.32;
+const SAMPLE_Y1 = 0.78;
+
 export default function App() {
   const videoRef = useRef(null);
+  const frameRef = useRef(null);
   const streamRef = useRef(null);
   const photoRef = useRef(null);
   const [config, setConfig] = useState(null);
@@ -74,6 +81,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [savedId, setSavedId] = useState(null);
+  const [guide, setGuide] = useState(null);
 
   async function loadRecords() {
     const response = await fetch("/api/analyses");
@@ -148,6 +156,45 @@ export default function App() {
       streamRef.current?.getTracks().forEach((track) => track.stop());
     };
   }, []);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    const frame = frameRef.current;
+    if (!video || !frame) return undefined;
+
+    function placeGuide() {
+      const width = frame.clientWidth;
+      const height = frame.clientHeight;
+      const videoWidth = video.videoWidth;
+      const videoHeight = video.videoHeight;
+      if (!width || !height || !videoWidth || !videoHeight) {
+        setGuide(null);
+        return;
+      }
+      const scale = Math.max(width / videoWidth, height / videoHeight);
+      const displayedWidth = videoWidth * scale;
+      const displayedHeight = videoHeight * scale;
+      const offsetX = (width - displayedWidth) / 2;
+      const offsetY = (height - displayedHeight) / 2;
+      setGuide({
+        boxLeft: offsetX + displayedWidth * SAMPLE_X0,
+        boxTop: offsetY + displayedHeight * SAMPLE_Y0,
+        boxWidth: displayedWidth * (SAMPLE_X1 - SAMPLE_X0),
+        boxHeight: displayedHeight * (SAMPLE_Y1 - SAMPLE_Y0),
+        cx: offsetX + displayedWidth * 0.5,
+        cy: offsetY + displayedHeight * 0.5,
+      });
+    }
+
+    placeGuide();
+    video.addEventListener("loadedmetadata", placeGuide);
+    const observer = new ResizeObserver(placeGuide);
+    observer.observe(frame);
+    return () => {
+      video.removeEventListener("loadedmetadata", placeGuide);
+      observer.disconnect();
+    };
+  }, [cameraReady]);
 
   async function capture() {
     const video = videoRef.current;
@@ -266,7 +313,40 @@ export default function App() {
             <span className="dot" />
             LIVE CAMERA RECORDING
           </div>
-          <video ref={videoRef} autoPlay playsInline muted />
+          <div className="camera-frame" ref={frameRef}>
+            <video ref={videoRef} autoPlay playsInline muted />
+            <div className="aim" aria-hidden="true">
+              <div
+                className="aim-box"
+                style={
+                  guide
+                    ? {
+                        left: guide.boxLeft,
+                        top: guide.boxTop,
+                        width: guide.boxWidth,
+                        height: guide.boxHeight,
+                      }
+                    : undefined
+                }
+              />
+              <div
+                className="aim-cross"
+                style={guide ? { left: guide.cx, top: guide.cy } : undefined}
+              >
+                <svg viewBox="0 0 72 72">
+                  <circle cx="36" cy="36" r="16" />
+                  <path d="M36 6v12M36 54v12M6 36h12M54 36h12" />
+                  <circle className="aim-dot" cx="36" cy="36" r="2.2" />
+                </svg>
+              </div>
+              <span
+                className="aim-label"
+                style={guide ? { left: guide.cx, top: guide.cy } : undefined}
+              >
+                Place beaker here
+              </span>
+            </div>
+          </div>
           {!cameraReady && (
             <button className="enable" type="button" onClick={startCamera}>
               Enable camera
@@ -277,6 +357,9 @@ export default function App() {
             Capture and analyse colour
           </button>
         </div>
+        <p className="hint camera-hint">
+          Line the coloured solution up with the centre mark. Colour is read from inside the box.
+        </p>
         {cameraError && <p className="hint">{cameraError}</p>}
         {analysed?.low_colour_signal && (
           <p className="warn">The photo looks mostly blank. Centre the coloured solution and take another photo.</p>

@@ -218,6 +218,45 @@ st.markdown(
         border-radius: 14px;
     }
 
+    [data-testid="stCameraInputWebcamStyledBox"],
+    [data-testid="stCameraInput"] div:has(> img[alt="Snapshot"]) {
+        position: relative !important;
+    }
+
+    [data-testid="stCameraInputWebcamStyledBox"]::before,
+    [data-testid="stCameraInput"] div:has(> img[alt="Snapshot"])::before {
+        content: "";
+        position: absolute;
+        left: 30%;
+        top: 32%;
+        width: 40%;
+        height: 46%;
+        border: 2px solid rgba(255, 255, 255, 0.95);
+        border-radius: 12px;
+        box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+        pointer-events: none;
+        z-index: 4;
+    }
+
+    [data-testid="stCameraInputWebcamStyledBox"]::after,
+    [data-testid="stCameraInput"] div:has(> img[alt="Snapshot"])::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 34px;
+        height: 34px;
+        transform: translate(-50%, -50%);
+        border: 2px solid #ffffff;
+        border-radius: 50%;
+        background:
+            linear-gradient(#ffffff, #ffffff) center / 2px 34px no-repeat,
+            linear-gradient(#ffffff, #ffffff) center / 34px 2px no-repeat;
+        filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.9));
+        pointer-events: none;
+        z-index: 5;
+    }
+
     .colour-card {
         border-radius: 18px;
         min-height: 158px;
@@ -391,8 +430,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.markdown(
-    '<div class="camera-note">Point the camera at the beaker, then take a photo. '
-    "The solution colour is read from the centre of the frame.</div>",
+    '<div class="camera-note">Line the coloured solution up with the centre mark, then take a photo. '
+    "Colour is read from inside the box in the middle of the frame.</div>",
     unsafe_allow_html=True,
 )
 with st.container(key="camera_panel"):

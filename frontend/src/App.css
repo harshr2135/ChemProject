@@ -99,6 +99,7 @@ button, input, select { font: inherit; }
 .control input:disabled { color: #98a2b3; }
 
 .hint, .warn, .ok { font-size: 0.92rem; }
+.camera-hint { margin: 8px 0 0; }
 .hint { color: #667085; }
 .warn {
   background: #fff8eb;
@@ -122,12 +123,80 @@ button, input, select { font: inherit; }
   min-height: 280px;
 }
 
+.camera-frame {
+  position: relative;
+  height: 320px;
+}
+
 .camera video {
   display: block;
   width: 100%;
   height: 320px;
   object-fit: cover;
   background: #cfd6e0;
+}
+
+.aim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.aim-box {
+  position: absolute;
+  left: 30%;
+  top: 32%;
+  width: 40%;
+  height: 46%;
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+
+.aim-cross {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 72px;
+  height: 72px;
+  transform: translate(-50%, -50%);
+}
+
+.aim-cross svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.aim-cross circle,
+.aim-cross path {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.9)) drop-shadow(0 0 2px rgba(0, 0, 0, 0.55));
+}
+
+.aim-cross .aim-dot {
+  fill: #ffffff;
+  stroke: none;
+}
+
+.aim-label {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, calc(-100% - 46px));
+  background: rgba(18, 18, 18, 0.72);
+  color: #ffffff;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 
 .live {
@@ -302,7 +371,7 @@ th, td {
   .page { padding: 0 0 28px; }
   .card, .history { border-radius: 0; }
   .inputs, .swatches { grid-template-columns: 1fr; }
-  .camera video { height: 230px; }
+  .camera-frame, .camera video { height: 230px; }
   .actions { justify-content: stretch; }
   .store { width: 100%; }
 }
