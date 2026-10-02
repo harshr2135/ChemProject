@@ -1,6 +1,5 @@
 from hashlib import sha256
 from pathlib import Path
-import re
 
 import joblib
 import numpy as np
@@ -26,51 +25,38 @@ st.set_page_config(
 ROOT = Path(__file__).resolve().parent
 ARTIFACT_DIR = ROOT / "artifacts"
 
-MODEL_VARIANTS = {
-    "Volume + concentration": {
-        "abs": ARTIFACT_DIR / "absorbance_model.joblib",
-        "rgb": ARTIFACT_DIR / "colour_model_rgb.joblib",
-        "meta": ARTIFACT_DIR / "model_metadata.joblib",
-        "uses_volume": True,
-    },
-    "Concentration only (no volume)": {
-        "abs": ARTIFACT_DIR / "absorbance_model_no_volume.joblib",
-        "rgb": ARTIFACT_DIR / "colour_model_rgb_no_volume.joblib",
-        "meta": ARTIFACT_DIR / "model_metadata_no_volume.joblib",
-        "uses_volume": False,
-    },
+MODEL = {
+    "label": "Concentration only",
+    "abs": ARTIFACT_DIR / "absorbance_model_no_volume.joblib",
+    "rgb": ARTIFACT_DIR / "colour_model_rgb_no_volume.joblib",
+    "meta": ARTIFACT_DIR / "model_metadata_no_volume.joblib",
 }
 
 
 @st.cache_resource
-def load_models(variant_name: str, cache_version: str = "svr_abs_v1"):
+def load_models(cache_version: str = "conc_only_v1"):
     # cache_version busts Streamlit's model cache when artifacts are swapped
     _ = cache_version
-    config = MODEL_VARIANTS[variant_name]
-    abs_path = config["abs"]
-    rgb_path = config["rgb"]
+    abs_path = MODEL["abs"]
+    rgb_path = MODEL["rgb"]
 
     if not abs_path.exists() or not rgb_path.exists():
         raise FileNotFoundError(
-            f"Model files for '{variant_name}' are missing. "
+            "Concentration-only model files are missing. "
             "Run the notebook training cells first to create artifacts."
         )
 
     abs_model = joblib.load(abs_path)
     rgb_model = joblib.load(rgb_path)
     metadata = {}
-    if config["meta"].exists():
-        metadata = joblib.load(config["meta"])
+    if MODEL["meta"].exists():
+        metadata = joblib.load(MODEL["meta"])
 
-    return abs_model, rgb_model, metadata, config["uses_volume"]
+    return abs_model, rgb_model, metadata
 
 
-def predict_sample(abs_model, rgb_model, concentration, volume_ml=None, uses_volume=True):
-    if uses_volume:
-        sample = pd.DataFrame({"volume_ml": [volume_ml], "conc": [concentration]})
-    else:
-        sample = pd.DataFrame({"conc": [concentration]})
-
+def predict_sample(abs_model, rgb_model, concentration):
+    sample = pd.DataFrame({"conc": [concentration]})
     predicted_abs = float(abs_model.predict(sample)[0])
     sample_color = sample.assign(abs_pred=[predicted_abs])
     predicted_rgb = np.rint(np.clip(rgb_model.predict(sample_color)[0], 0, 255)).astype(int)
@@ -81,24 +67,6 @@ def predict_sample(abs_model, rgb_model, concentration, volume_ml=None, uses_vol
         "predicted_rgb": tuple(int(value) for value in predicted_rgb),
         "predicted_hex": predicted_hex,
     }
-
-
-def get_volume_training_range(metadata):
-    if not isinstance(metadata, dict):
-        return None, None, []
-
-    labels = metadata.get("volume_labels", [])
-    parsed_values = []
-    for label in labels:
-        match = re.search(r"(\d+(?:\.\d+)?)", str(label))
-        if match:
-            parsed_values.append(float(match.group(1)))
-
-    if not parsed_values:
-        return None, None, []
-
-    unique_values = sorted(set(parsed_values))
-    return min(unique_values), max(unique_values), unique_values
 
 
 def ink_for(hex_color: str) -> str:
@@ -351,76 +319,28 @@ if schema_error:
     st.caption("Paste this SQL, click Run, then refresh this page.")
     st.code((ROOT / "supabase_schema.sql").read_text(encoding="utf-8"), language="sql")
 
-with st.expander("Model settings"):
-    variant = st.radio(
-        "Model",
-        options=list(MODEL_VARIANTS.keys()),
-        horizontal=True,
-        help="Volume + concentration is the main model. Concentration only ignores volume.",
-    )
-
 try:
-    abs_model, rgb_model, metadata, uses_volume = load_models(variant)
+    abs_model, rgb_model, metadata = load_models()
 except Exception as exc:
     st.error(str(exc))
     st.stop()
 
-volume_min, volume_max, _volume_values = get_volume_training_range(metadata)
-volume_default = float(np.clip(3.0, volume_min, volume_max)) if volume_min is not None else 3.0
 conc_default = 1.5
 
-input_left, input_right = st.columns(2)
-with input_left:
-    st.markdown('<div class="field-label">Enter Volume</div>', unsafe_allow_html=True)
-    if uses_volume:
-        volume_ml = st.number_input(
-            "Volume (mL)",
-            min_value=0.0,
-            value=volume_default,
-            step=0.1,
-            format="%.2f",
-            label_visibility="collapsed",
-            key="volume_ml",
-            help="Volume in millilitres. The model was trained on 1–5 mL.",
-        )
-    else:
-        volume_ml = None
-        st.caption("This model uses concentration only, so volume is not used.")
-with input_right:
-    st.markdown('<div class="field-label">Enter Concentration</div>', unsafe_allow_html=True)
-    concentration = st.number_input(
-        "Concentration",
-        min_value=0.0,
-        value=conc_default,
-        step=0.1,
-        format="%.2f",
-        label_visibility="collapsed",
-        key="concentration",
-        help="Use the same concentration units as the training sheet (about 0.2 to 10).",
-    )
-
-if uses_volume and volume_min is not None and volume_max is not None:
-    st.caption(f"Trained volume range: {volume_min:.0f}–{volume_max:.0f} mL. Concentration in the training sheet runs from 0.2 to 10.")
-
-if (
-    uses_volume
-    and volume_min is not None
-    and volume_max is not None
-    and volume_ml is not None
-    and not (volume_min <= volume_ml <= volume_max)
-):
-    st.warning(
-        f"Volume {volume_ml:.2f} mL is outside the trained range "
-        f"({volume_min:.0f}–{volume_max:.0f} mL). The predicted colour and absorbance may be less reliable."
-    )
-
-result = predict_sample(
-    abs_model,
-    rgb_model,
-    concentration,
-    volume_ml=volume_ml,
-    uses_volume=uses_volume,
+st.markdown('<div class="field-label">Enter Concentration</div>', unsafe_allow_html=True)
+concentration = st.number_input(
+    "Concentration",
+    min_value=0.0,
+    value=conc_default,
+    step=0.1,
+    format="%.2f",
+    label_visibility="collapsed",
+    key="concentration",
+    help="Use the same concentration units as the training sheet (about 0.2 to 10).",
 )
+st.caption("Concentration in the training sheet runs from 0.2 to 10.")
+
+result = predict_sample(abs_model, rgb_model, concentration)
 pred_abs = result["predicted_absorbance"]
 pred_rgb = result["predicted_rgb"]
 pred_hex = result["predicted_hex"]
@@ -486,8 +406,6 @@ else:
 signature = None
 if analyzed and photo_bytes is not None:
     signature = (
-        variant,
-        None if volume_ml is None else round(float(volume_ml), 4),
         round(float(concentration), 4),
         pred_hex,
         analyzed_hex,
@@ -508,7 +426,7 @@ with store_col:
             type="primary",
             width="stretch",
             disabled=analyzed is None or photo_bytes is None or already_saved,
-            help="Saves volume, concentration, predicted absorbance and colour, and the colour measured from the photo.",
+            help="Saves concentration, predicted absorbance and colour, and the colour measured from the photo.",
         )
 
 if store_clicked:
@@ -517,8 +435,8 @@ if store_clicked:
     else:
         try:
             record_id = save_analysis(
-                model_variant=variant,
-                volume_ml=None if volume_ml is None else float(volume_ml),
+                model_variant=MODEL["label"],
+                volume_ml=None,
                 concentration=float(concentration),
                 predicted_absorbance=pred_abs,
                 predicted_rgb=pred_rgb,
@@ -574,12 +492,10 @@ with st.expander("Saved analyses", expanded=already_saved):
     if not records:
         st.caption("Nothing stored yet. Capture a photo, check the two colours, then store the analysis.")
     else:
-        table = pd.DataFrame(records).rename(
+        table = pd.DataFrame(records).drop(columns=["volume_ml", "model_variant"], errors="ignore").rename(
             columns={
                 "id": "ID",
                 "created_at": "Saved",
-                "model_variant": "Model",
-                "volume_ml": "Volume (mL)",
                 "concentration": "Concentration",
                 "predicted_absorbance": "Absorbance",
                 "predicted_hex": "Predicted",
@@ -593,7 +509,6 @@ with st.expander("Saved analyses", expanded=already_saved):
             width="stretch",
             column_config={
                 "Absorbance": st.column_config.NumberColumn(format="%.4f"),
-                "Volume (mL)": st.column_config.NumberColumn(format="%.2f"),
                 "Concentration": st.column_config.NumberColumn(format="%.2f"),
                 "Colour difference": st.column_config.NumberColumn(format="%.1f"),
             },

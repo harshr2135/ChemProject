@@ -62,7 +62,7 @@ button, input, select { font: inherit; }
 
 .inputs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 420px);
   gap: 22px;
 }
 

@@ -70,7 +70,6 @@ export default function App() {
   const streamRef = useRef(null);
   const photoRef = useRef(null);
   const [config, setConfig] = useState(null);
-  const [volume, setVolume] = useState("3.00");
   const [concentration, setConcentration] = useState("1.50");
   const [prediction, setPrediction] = useState(null);
   const [analysed, setAnalysed] = useState(null);
@@ -95,7 +94,6 @@ export default function App() {
       .then((response) => response.json())
       .then((body) => {
         setConfig(body);
-        setVolume(Number(body.default_volume).toFixed(2));
         setConcentration(Number(body.default_concentration).toFixed(2));
       })
       .catch(() => setError("The prediction API is not running."));
@@ -105,17 +103,12 @@ export default function App() {
   useEffect(() => {
     const handle = setTimeout(async () => {
       const conc = Number(concentration);
-      const vol = Number(volume);
-      if (!Number.isFinite(conc) || !Number.isFinite(vol)) return;
+      if (!Number.isFinite(conc)) return;
       try {
         const response = await fetch("/api/predict", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            variant: "volume_concentration",
-            concentration: conc,
-            volume_ml: vol,
-          }),
+          body: JSON.stringify({ concentration: conc }),
         });
         if (!response.ok) {
           setError(await readError(response));
@@ -129,7 +122,7 @@ export default function App() {
       }
     }, 200);
     return () => clearTimeout(handle);
-  }, [volume, concentration]);
+  }, [concentration]);
 
   async function startCamera() {
     setCameraError("");
@@ -232,9 +225,7 @@ export default function App() {
     setError("");
     try {
       const body = new FormData();
-      body.append("variant", "volume_concentration");
       body.append("concentration", concentration);
-      body.append("volume_ml", volume);
       body.append("image", photoRef.current, "capture.jpg");
       const response = await fetch("/api/analyses", { method: "POST", body });
       if (!response.ok) {
@@ -273,18 +264,6 @@ export default function App() {
 
         <div className="inputs">
           <label className="field">
-            <span>Enter Volume</span>
-            <div className="control">
-              <FlaskIcon />
-              <input
-                inputMode="decimal"
-                value={volume}
-                placeholder="Enter volume (e.g., 3 mL)"
-                onChange={(event) => setVolume(event.target.value)}
-              />
-            </div>
-          </label>
-          <label className="field">
             <span>Enter Concentration</span>
             <div className="control">
               <FlaskIcon />
@@ -297,16 +276,7 @@ export default function App() {
             </div>
           </label>
         </div>
-        {prediction?.volume_min != null && (
-          <p className="hint">
-            Trained volume range: {prediction.volume_min}–{prediction.volume_max} mL. Concentration in the training sheet runs from 0.2 to 10.
-          </p>
-        )}
-        {prediction?.volume_outside_range && (
-          <p className="warn">
-            Volume {volume} mL is outside the trained range ({prediction.volume_min}–{prediction.volume_max} mL). The prediction may be less reliable.
-          </p>
-        )}
+        <p className="hint">Concentration in the training sheet runs from 0.2 to 10.</p>
 
         <div className="camera">
           <div className="live">
@@ -414,7 +384,6 @@ export default function App() {
                 <tr>
                   <th>ID</th>
                   <th>Saved</th>
-                  <th>Volume</th>
                   <th>Conc</th>
                   <th>Abs</th>
                   <th>Predicted</th>
@@ -426,7 +395,6 @@ export default function App() {
                   <tr key={row.id}>
                     <td>{row.id}</td>
                     <td>{row.created_at}</td>
-                    <td>{row.volume_ml ?? "—"}</td>
                     <td>{row.concentration}</td>
                     <td>{Number(row.predicted_absorbance).toFixed(4)}</td>
                     <td>
